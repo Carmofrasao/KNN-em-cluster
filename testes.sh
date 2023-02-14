@@ -16,5 +16,3 @@ for vez in $(seq 1 10)  # 10 vezes
 do
     mpirun -np 4 --hostfile hostfile.txt ./knn 128 400000 300 128 2> /dev/null | grep -oP '(?<=total_time_in_seconds: )[^ ]*'
 done
-
-#

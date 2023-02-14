@@ -30,7 +30,7 @@
     
   } chronometer_t;
  
-//
+
   void chrono_reset( chronometer_t *chrono )
   {
       chrono->xtotal_ns = 0;

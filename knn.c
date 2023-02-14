@@ -25,7 +25,7 @@ int processId; 	    // rank dos processos
 float r;            // valor aleatorio para preecher as matrizes
 
 chronometer_t knnTime;
-//
+
 #define DEBUG 0
 
 float ** knn( float **Q, int nq, float **P, int n, int D, int k){
@@ -34,7 +34,7 @@ float ** knn( float **Q, int nq, float **P, int n, int D, int k){
     for (int i = 0; i < nq; i++)
         vizinhos_aux[i] = (float*)calloc(k, sizeof(float));
 
-
+    
 
     return vizinhos_aux;
 }
