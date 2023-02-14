@@ -1,0 +1,4 @@
+j1 slots=1
+j2 slots=1
+j3 slots=1
+j4 slots=1
