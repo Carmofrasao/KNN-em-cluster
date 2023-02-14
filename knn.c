@@ -83,11 +83,6 @@ int main(int argc, char *argv[]){
 
     geraConjuntoDeDados( Q, nq, D );
 
-    vizinhos = (float**)calloc(nq, sizeof(float*));
-
-    for (int i = 0; i < nq; i++)
-        vizinhos[i] = (float*)calloc(k, sizeof(float));
-
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	if(processId == 0){
@@ -121,7 +116,17 @@ int main(int argc, char *argv[]){
 		printf("Throughput: %lf MB/s\n", MBPS*(nproc-1));
 	}
 
-	free(inmsg);
+    for(int i = 0; i < nq; i++)
+        free(Q[i]);
+    free(Q);
+
+    for(int i = 0; i < n; i++)
+        free(P[i]);
+    free(P);
+
+    for (int i = 0; i < nq; i++)
+        free(vizinhos[i]);
+    free(vizinhos);
 
 	MPI_Finalize( );
 	return 0;
