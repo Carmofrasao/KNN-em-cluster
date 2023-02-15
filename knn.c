@@ -14,6 +14,7 @@
 
 const int SEED = 100;
 
+int nproc;      	// o número de processos MPI
 int n;              // numero de pontos de uma matriz
 int nq;             // numero de pontos de outro matriz
 int k;              // numero de vizinhos
@@ -30,11 +31,41 @@ chronometer_t knnTime;
 
 float ** knn( float **Q, int nq, float **P, int n, int D, int k){
     float **vizinhos_aux = (float**)calloc(nq, sizeof(float*));
+	
+	int rangeQ = nq/nproc;
+	int rangeIniQ = processId*rangeQ;
+	int rangeFimQ = processId*rangeQ+rangeQ-1;
+
+	int rangeP = n/nproc;
+	int rangeIniP = processId*rangeP;
+	int rangeFimP = processId*rangeP+rangeP-1;
 
     for (int i = 0; i < nq; i++)
         vizinhos_aux[i] = (float*)calloc(k, sizeof(float));
 
-    
+    if(processId == 0){
+		MPI_Bcast(Q, nq*D, MPI_FLOAT, 0, MPI_COMM_WORLD);
+		MPI_Bcast(P, n*D, MPI_FLOAT, 0, MPI_COMM_WORLD);
+	}
+
+	#if DEBUG == 1
+		printf("ID: %d\n", processId);
+		printf("matriz Q:\n");
+		for (int i = 0; i < nq; i++){
+			for (int l = 0; l < D; l++)
+				printf("%f ", Q[i][l]);
+			printf("\n");
+		}
+		printf("matriz P:\n");
+		for (int i = 0; i < n; i++){
+			for (int l = 0; l < D; l++)
+				printf("%f ", P[i][l]);
+			printf("\n");
+		}
+		printf("Range ini Q: %d\nRange fim Q: %d\nRange ini P: %d\nRange fim P: %d\n", processId, rangeIniQ, rangeFimQ, rangeIniP, rangeFimP);
+	#endif
+
+	
 
     return vizinhos_aux;
 }
@@ -57,7 +88,7 @@ int main(int argc, char *argv[]){
 	else {
         nq = atoi(argv[1]);
         n = atoi(argv[2]);
-		D = atoi(argv[3])
+		D = atoi(argv[3]);
         k = atoi(argv[4]);
 	}
 
@@ -96,25 +127,22 @@ int main(int argc, char *argv[]){
 
     // ATÉ AQUI!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-	for(int m = 0; m < nmsg; m++)
-		MPI_Bcast(inmsg, ni, MPI_LONG, raiz, MPI_COMM_WORLD);
-
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	if(processId == 0){
-		chrono_stop(&knnTime);
-		chrono_reportTime(&knnTime, "knnTime");
+	// if(processId == 0){
+	// 	chrono_stop(&knnTime);
+	// 	chrono_reportTime(&knnTime, "knnTime");
 
-		// calcular e imprimir a VAZAO (numero de operacoes/s)
-		double total_time_in_seconds = (double)chrono_gettotal(&knnTime) /
-									((double)1000 * 1000 * 1000);
-	    double total_time_in_micro = (double)chrono_gettotal(&knnTime) /
-									((double)1000);
-		printf("total_time_in_seconds: %lf s\n", total_time_in_seconds);
-		printf("Latencia: %lf us/nmsg\n", (total_time_in_micro / nmsg)/2);
-		double MBPS = ((double)(nmsg*tmsg) / ((double)total_time_in_seconds*1000*1000));
-		printf("Throughput: %lf MB/s\n", MBPS*(nproc-1));
-	}
+	// 	// calcular e imprimir a VAZAO (numero de operacoes/s)
+	// 	double total_time_in_seconds = (double)chrono_gettotal(&knnTime) /
+	// 								((double)1000 * 1000 * 1000);
+	//     double total_time_in_micro = (double)chrono_gettotal(&knnTime) /
+	// 								((double)1000);
+	// 	printf("total_time_in_seconds: %lf s\n", total_time_in_seconds);
+	// 	printf("Latencia: %lf us/nmsg\n", (total_time_in_micro / nmsg)/2);
+	// 	double MBPS = ((double)(nmsg*tmsg) / ((double)total_time_in_seconds*1000*1000));
+	// 	printf("Throughput: %lf MB/s\n", MBPS*(nproc-1));
+	// }
 
     for(int i = 0; i < nq; i++)
         free(Q[i]);
