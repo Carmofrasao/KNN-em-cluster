@@ -5,14 +5,7 @@
 #include "chrono.c"
 #include <assert.h>
 #include <time.h>
-
-#define USE_MPI_Bcast 1  // do NOT change
-#define USE_my_Bcast 2   // do NOT change
-//choose either BCAST_TYPE in the defines bellow
-//#define BCAST_TYPE USE_MPI_Bcast
-#define BCAST_TYPE USE_my_Bcast
-
-const int SEED = 100;
+#include "verificaKNN.c"
 
 int nproc;      	// o número de processos MPI
 int n;              // numero de pontos de uma matriz
@@ -21,7 +14,7 @@ int k;              // numero de vizinhos
 int D;              // dimensões
 float **P;          // matriz P
 float **Q;          // matriz Q
-float ** vizinhos;  // vizinhos mais proximos
+int ** vizinhos;	// vizinhos mais proximos
 int processId; 	    // rank dos processos
 float r;            // valor aleatorio para preecher as matrizes
 
@@ -29,8 +22,8 @@ chronometer_t knnTime;
 
 #define DEBUG 0
 
-float ** knn( float **Q, int nq, float **P, int n, int D, int k){
-    float **vizinhos_aux = (float**)calloc(nq, sizeof(float*));
+int ** knn( float **Q, int nq, float **P, int n, int D, int k){
+    int **vizinhos_aux = (int**)calloc(nq, sizeof(int*));
 	
 	int rangeQ = nq/nproc;
 	int rangeIniQ = processId*rangeQ;
@@ -41,29 +34,12 @@ float ** knn( float **Q, int nq, float **P, int n, int D, int k){
 	int rangeFimP = processId*rangeP+rangeP-1;
 
     for (int i = 0; i < nq; i++)
-        vizinhos_aux[i] = (float*)calloc(k, sizeof(float));
+        vizinhos_aux[i] = (int*)calloc(k, sizeof(int));
 
     if(processId == 0){
 		MPI_Bcast(Q, nq*D, MPI_FLOAT, 0, MPI_COMM_WORLD);
 		MPI_Bcast(P, n*D, MPI_FLOAT, 0, MPI_COMM_WORLD);
 	}
-
-	#if DEBUG == 1
-		printf("ID: %d\n", processId);
-		printf("matriz Q:\n");
-		for (int i = 0; i < nq; i++){
-			for (int l = 0; l < D; l++)
-				printf("%f ", Q[i][l]);
-			printf("\n");
-		}
-		printf("matriz P:\n");
-		for (int i = 0; i < n; i++){
-			for (int l = 0; l < D; l++)
-				printf("%f ", P[i][l]);
-			printf("\n");
-		}
-		printf("Range ini Q: %d\nRange fim Q: %d\nRange ini P: %d\nRange fim P: %d\n", processId, rangeIniQ, rangeFimQ, rangeIniP, rangeFimP);
-	#endif
 
 	
 
@@ -121,28 +97,25 @@ int main(int argc, char *argv[]){
 		chrono_start(&knnTime);
 	}
 
-    // CÓDIGO PRINCIPAL!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
     vizinhos = knn( Q, nq, P, n, D, k);
-
-    // ATÉ AQUI!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	// if(processId == 0){
-	// 	chrono_stop(&knnTime);
-	// 	chrono_reportTime(&knnTime, "knnTime");
+	if(processId == 0){
+		verificaKNN(Q, nq, P, n, D, k, vizinhos);
+		chrono_stop(&knnTime);
+		chrono_reportTime(&knnTime, "knnTime");
 
-	// 	// calcular e imprimir a VAZAO (numero de operacoes/s)
-	// 	double total_time_in_seconds = (double)chrono_gettotal(&knnTime) /
-	// 								((double)1000 * 1000 * 1000);
-	//     double total_time_in_micro = (double)chrono_gettotal(&knnTime) /
-	// 								((double)1000);
-	// 	printf("total_time_in_seconds: %lf s\n", total_time_in_seconds);
-	// 	printf("Latencia: %lf us/nmsg\n", (total_time_in_micro / nmsg)/2);
-	// 	double MBPS = ((double)(nmsg*tmsg) / ((double)total_time_in_seconds*1000*1000));
-	// 	printf("Throughput: %lf MB/s\n", MBPS*(nproc-1));
-	// }
+		// calcular e imprimir a VAZAO (numero de operacoes/s)
+		double total_time_in_seconds = (double)chrono_gettotal(&knnTime) /
+									((double)1000 * 1000 * 1000);
+	    double total_time_in_micro = (double)chrono_gettotal(&knnTime) /
+									((double)1000);
+		printf("total_time_in_seconds: %lf s\n", total_time_in_seconds);
+		// printf("Latencia: %lf us/nmsg\n", (total_time_in_micro / nmsg)/2);
+		// double MBPS = ((double)(nmsg*tmsg) / ((double)total_time_in_seconds*1000*1000));
+		// printf("Throughput: %lf MB/s\n", MBPS*(nproc-1));
+	}
 
     for(int i = 0; i < nq; i++)
         free(Q[i]);
