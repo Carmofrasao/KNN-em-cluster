@@ -18,23 +18,21 @@ int ** vizinhos;	// vizinhos mais proximos
 int processId; 	    // rank dos processos
 float r;            // valor aleatorio para preecher as matrizes
 
-typedef struct{
-	float dist;
-	int id;
-} ponto;
-
-
 chronometer_t knnTime;
 
 #define DEBUG 0
 
-void ordena(ponto *A, ponto *B){
-	ponto C;
-	if(A->dist > B->dist){
-		C = *A;
-		*A = *B;
-		*B = C;
-	}
+int maior(float A, float B){
+	if(A > B)
+		return 1;
+	else
+		return 0;
+}
+
+void ordena(int *A, int *B){
+	int C = *A;
+	*A = *B;
+	*B = C;
 }
 
 int ** knn( float **Q, int nq, float **P, int n, int D, int k){
@@ -50,32 +48,36 @@ int ** knn( float **Q, int nq, float **P, int n, int D, int k){
 		for (int l = 0; l < k; l++)
 			vizinhos_aux[i][l] = -1;
 	
-	ponto ** PQ = (ponto**)calloc(nq, sizeof(ponto*));
+	float ** PQ_dist = (float**)calloc(nq, sizeof(float*));
 	for (int i = 0; i < nq; i++)
-		PQ[i] = (ponto*)calloc(n, sizeof(ponto));
+		PQ_dist[i] = (float*)calloc(n, sizeof(float));
+	int ** PQ_id = (int**)calloc(nq, sizeof(int*));
+	for (int i = 0; i < nq; i++)
+		PQ_id[i] = (int*)calloc(n, sizeof(int));
 
     if(processId == 0){
 		for (int i = 0; i < nq; i++)
 			for (int l = 0; l < n; l++){
 				for(int w = 0; w < D; w++)
-					PQ[i][l].dist += (P[l][w] - Q[i][w]) * (P[l][w] - Q[i][w]);
-				PQ[i][l].id = l;
+					PQ_dist[i][l] += (P[l][w] - Q[i][w]) * (P[l][w] - Q[i][w]);
+				PQ_id[i][l] = l;
 			}
 		for (int i = 0; i < nq; i++)
 			for(int z = 0; z < n-1; z++)
 				for (int l = z+1; l < n; l++)
-					ordena(&PQ[i][z], &PQ[i][l]);
-		MPI_Bcast(Q, nq*D, MPI_FLOAT, 0, MPI_COMM_WORLD);
-		MPI_Bcast(P, n*D, MPI_FLOAT, 0, MPI_COMM_WORLD);
-		MPI_Bcast(PQ, n*nq, MPI_FLOAT, 0, MPI_COMM_WORLD);
-		MPI_Bcast(vizinhos_aux, nq*k, MPI_INT, 0, MPI_COMM_WORLD);
+					if(maior(PQ_dist[i][z], PQ_dist[i][l]) == 1)
+						ordena(&PQ_id[i][z], &PQ_id[i][l]);
 	}
+
+	for(int i = 0; i < nq; i++)
+		MPI_Bcast(PQ_id[i], n, MPI_INT, 0, MPI_COMM_WORLD);
 
 	for (int l = rangeIniQ; l < rangeFimQ; l++)
 		for (int i = 0; i < k; i++)
-			vizinhos_aux[l][i] = PQ[l][i].id;
+			vizinhos_aux[l][i] = PQ_id[l][i];
 
-	MPI_Gather( &vizinhos_aux, rangeIniQ, MPI_INT, &vizinhos_aux, rangeIniQ, MPI_INT, 0, MPI_COMM_WORLD);
+	for (int l = rangeIniQ; l < rangeFimQ; l++)
+		MPI_Gather( &vizinhos_aux[l], 0, MPI_INT, vizinhos_aux[l], 0, MPI_INT, 0, MPI_COMM_WORLD);
 
     return vizinhos_aux;
 }
