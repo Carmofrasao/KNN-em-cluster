@@ -48,11 +48,11 @@ int ** knn( float **Q, int nq, float **P, int n, int D, int k){
 		for (int l = 0; l < k; l++)
 			vizinhos_aux[i*k+l] = -1;
 	
-	float ** PQ_dist = (float**)calloc(nq, sizeof(float*));
-	for (int i = 0; i < nq; i++)
+	float ** PQ_dist = (float**)calloc((rangeFimQ-rangeIniQ), sizeof(float*));
+	for (int i = 0; i < (rangeFimQ-rangeIniQ); i++)
 		PQ_dist[i] = (float*)calloc(n, sizeof(float));
-	int ** PQ_id = (int**)calloc(nq, sizeof(int*));
-	for (int i = 0; i < nq; i++)
+	int ** PQ_id = (int**)calloc((rangeFimQ-rangeIniQ), sizeof(int*));
+	for (int i = 0; i < (rangeFimQ-rangeIniQ); i++)
 		PQ_id[i] = (int*)calloc(n, sizeof(int));
 
     if(processId == 0){
@@ -61,25 +61,28 @@ int ** knn( float **Q, int nq, float **P, int n, int D, int k){
 			vizinhoo[i] = (int*)calloc(k, sizeof(int));
 
 		vizinho = (int*)calloc(nq*k, sizeof(int*));
-		for (int i = 0; i < nq; i++)
-			for (int l = 0; l < n; l++){
-				for(int w = 0; w < D; w++)
-					PQ_dist[i][l] += (P[l][w] - Q[i][w]) * (P[l][w] - Q[i][w]);
-				PQ_id[i][l] = l;
-			}
-		for (int i = 0; i < nq; i++)
-			for(int z = 0; z < n-1; z++)
-				for (int l = z+1; l < n; l++)
-					if(maior(PQ_dist[i][z], PQ_dist[i][l]) == 1)
-						ordena(&PQ_id[i][z], &PQ_id[i][l]);
+
+		for(int i = 0; i < n; i++)
+			MPI_Bcast(P[i], D, MPI_INT, 0, MPI_COMM_WORLD);	
+		for(int i = 0; i < nq; i++)
+			MPI_Bcast(Q[i], D, MPI_INT, 0, MPI_COMM_WORLD);	
 	}
 
-	for(int i = 0; i < nq; i++)
-		MPI_Bcast(PQ_id[i], n, MPI_INT, 0, MPI_COMM_WORLD);
+	for (int i = rangeIniQ; i < rangeFimQ; i++)
+		for (int l = 0; l < n; l++){
+			for(int w = 0; w < D; w++)
+				PQ_dist[i-rangeIniQ][l] += (P[l][w] - Q[i][w]) * (P[l][w] - Q[i][w]);
+			PQ_id[i-rangeIniQ][l] = l;
+		}
+	for (int i = rangeIniQ; i < rangeFimQ; i++)
+		for(int z = 0; z < n-1; z++)
+			for (int l = z+1; l < n; l++)
+				if(maior(PQ_dist[i-rangeIniQ][z], PQ_dist[i-rangeIniQ][l]) == 1)
+					ordena(&PQ_id[i-rangeIniQ][z], &PQ_id[i-rangeIniQ][l]);
 
 	for (int l = rangeIniQ; l < rangeFimQ; l++)
 		for (int i = 0; i < k; i++)
-			vizinhos_aux[(l-rangeIniQ)*k+i] = PQ_id[l][i];
+			vizinhos_aux[(l-rangeIniQ)*k+i] = PQ_id[l-rangeIniQ][i];
 
 	MPI_Gather( vizinhos_aux, (rangeFimQ-rangeIniQ)*k, MPI_INT, vizinho, (rangeFimQ-rangeIniQ)*k, MPI_INT, 0, MPI_COMM_WORLD);
 
@@ -88,7 +91,7 @@ int ** knn( float **Q, int nq, float **P, int n, int D, int k){
 			for(int l = 0; l < k; l++)
 				vizinhoo[i][l] = vizinho[i*k+l];
 
-	for (int i = 0; i < nq; i++){
+	for (int i = 0; i < (rangeFimQ-rangeIniQ); i++){
 		free(PQ_dist[i]);
 		free(PQ_id[i]);
 	}
