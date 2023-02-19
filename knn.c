@@ -39,14 +39,14 @@ int ** knn( float **Q, int nq, float **P, int n, int D, int k){
 	int rangeQ = nq/nproc;
 	int rangeIniQ = processId*rangeQ;
 	int rangeFimQ = processId*rangeQ+rangeQ;
+	int *vizinho;
+	int **vizinhoo;
 
-    int **vizinhos_aux = (int**)calloc(nq, sizeof(int*));
-	for (int i = 0; i < nq; i++)
-        vizinhos_aux[i] = (int*)calloc(k, sizeof(int));
+	int *vizinhos_aux = (int*)calloc((rangeFimQ-rangeIniQ)*k, sizeof(int*));
 
-	for (int i = 0; i < nq; i++)
+	for (int i = 0; i < rangeFimQ-rangeIniQ; i++)
 		for (int l = 0; l < k; l++)
-			vizinhos_aux[i][l] = -1;
+			vizinhos_aux[i*k+l] = -1;
 	
 	float ** PQ_dist = (float**)calloc(nq, sizeof(float*));
 	for (int i = 0; i < nq; i++)
@@ -56,6 +56,11 @@ int ** knn( float **Q, int nq, float **P, int n, int D, int k){
 		PQ_id[i] = (int*)calloc(n, sizeof(int));
 
     if(processId == 0){
+		vizinhoo = (int**)calloc(nq, sizeof(int*));
+		for (int i = 0; i < nq; i++)
+			vizinhoo[i] = (int*)calloc(k, sizeof(int));
+
+		vizinho = (int*)calloc(nq*k, sizeof(int*));
 		for (int i = 0; i < nq; i++)
 			for (int l = 0; l < n; l++){
 				for(int w = 0; w < D; w++)
@@ -74,12 +79,24 @@ int ** knn( float **Q, int nq, float **P, int n, int D, int k){
 
 	for (int l = rangeIniQ; l < rangeFimQ; l++)
 		for (int i = 0; i < k; i++)
-			vizinhos_aux[l][i] = PQ_id[l][i];
+			vizinhos_aux[(l-rangeIniQ)*k+i] = PQ_id[l][i];
 
-	for (int l = rangeIniQ; l < rangeFimQ; l++)
-		MPI_Gather( &vizinhos_aux[l], 0, MPI_INT, vizinhos_aux[l], 0, MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Gather( vizinhos_aux, (rangeFimQ-rangeIniQ)*k, MPI_INT, vizinho, (rangeFimQ-rangeIniQ)*k, MPI_INT, 0, MPI_COMM_WORLD);
 
-    return vizinhos_aux;
+	if(processId == 0)
+		for (int i = 0; i < nq; i++)
+			for(int l = 0; l < k; l++)
+				vizinhoo[i][l] = vizinho[i*k+l];
+
+	for (int i = 0; i < nq; i++){
+		free(PQ_dist[i]);
+		free(PQ_id[i]);
+	}
+	free(PQ_dist);
+	free(PQ_id);
+	free(vizinhos_aux);
+
+    return vizinhoo;
 }
 
 void geraConjuntoDeDados( float **Q, int nq, int D ){
@@ -151,6 +168,10 @@ int main(int argc, char *argv[]){
 		// printf("Latencia: %lf us/nmsg\n", (total_time_in_micro / nmsg)/2);
 		// double MBPS = ((double)(nmsg*tmsg) / ((double)total_time_in_seconds*1000*1000));
 		// printf("Throughput: %lf MB/s\n", MBPS*(nproc-1));
+
+		for (int i = 0; i < nq; i++)
+        	free(vizinhos[i]);
+    	free(vizinhos);
 	}
 
     for(int i = 0; i < nq; i++)
@@ -160,10 +181,6 @@ int main(int argc, char *argv[]){
     for(int i = 0; i < n; i++)
         free(P[i]);
     free(P);
-
-    for (int i = 0; i < nq; i++)
-        free(vizinhos[i]);
-    free(vizinhos);
 
 	MPI_Finalize( );
 	return 0;
