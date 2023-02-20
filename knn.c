@@ -18,6 +18,15 @@ int ** vizinhos;	// vizinhos mais proximos
 int processId; 	    // rank dos processos
 float r;            // valor aleatorio para preecher as matrizes
 
+int rangeQ;
+int rangeIniQ;
+int rangeFimQ;
+int *vizinho;
+int **vizinhoo;
+int *vizinhos_aux;
+float ** PQ_dist;
+int ** PQ_id;
+
 chronometer_t knnTime;
 
 #define DEBUG 0
@@ -36,37 +45,6 @@ void ordena(int *A, int *B){
 }
 
 int ** knn( float **Q, int nq, float **P, int n, int D, int k){
-	int rangeQ = nq/nproc;
-	int rangeIniQ = processId*rangeQ;
-	int rangeFimQ = processId*rangeQ+rangeQ;
-	int *vizinho;
-	int **vizinhoo;
-
-	int *vizinhos_aux = (int*)calloc((rangeFimQ-rangeIniQ)*k, sizeof(int*));
-
-	for (int i = 0; i < rangeFimQ-rangeIniQ; i++)
-		for (int l = 0; l < k; l++)
-			vizinhos_aux[i*k+l] = -1;
-	
-	float ** PQ_dist = (float**)calloc((rangeFimQ-rangeIniQ), sizeof(float*));
-	for (int i = 0; i < (rangeFimQ-rangeIniQ); i++)
-		PQ_dist[i] = (float*)calloc(n, sizeof(float));
-	int ** PQ_id = (int**)calloc((rangeFimQ-rangeIniQ), sizeof(int*));
-	for (int i = 0; i < (rangeFimQ-rangeIniQ); i++)
-		PQ_id[i] = (int*)calloc(n, sizeof(int));
-
-    if(processId == 0){
-		vizinhoo = (int**)calloc(nq, sizeof(int*));
-		for (int i = 0; i < nq; i++)
-			vizinhoo[i] = (int*)calloc(k, sizeof(int));
-
-		vizinho = (int*)calloc(nq*k, sizeof(int*));
-
-		for(int i = 0; i < n; i++)
-			MPI_Bcast(P[i], D, MPI_INT, 0, MPI_COMM_WORLD);	
-		for(int i = 0; i < nq; i++)
-			MPI_Bcast(Q[i], D, MPI_INT, 0, MPI_COMM_WORLD);	
-	}
 
 	for (int i = rangeIniQ; i < rangeFimQ; i++)
 		for (int l = 0; l < n; l++){
@@ -90,14 +68,6 @@ int ** knn( float **Q, int nq, float **P, int n, int D, int k){
 		for (int i = 0; i < nq; i++)
 			for(int l = 0; l < k; l++)
 				vizinhoo[i][l] = vizinho[i*k+l];
-
-	for (int i = 0; i < (rangeFimQ-rangeIniQ); i++){
-		free(PQ_dist[i]);
-		free(PQ_id[i]);
-	}
-	free(PQ_dist);
-	free(PQ_id);
-	free(vizinhos_aux);
 
     return vizinhoo;
 }
@@ -128,6 +98,10 @@ int main(int argc, char *argv[]){
 	MPI_Comm_size(MPI_COMM_WORLD, &nproc);
 	MPI_Comm_rank(MPI_COMM_WORLD, &processId);
 
+	rangeQ = nq/nproc;
+	rangeIniQ = processId*rangeQ;
+	rangeFimQ = processId*rangeQ+rangeQ;
+
 	MPI_Status Stat;
 
     srand(777); 
@@ -146,6 +120,32 @@ int main(int argc, char *argv[]){
 
     geraConjuntoDeDados( Q, nq, D );
 
+	vizinhos_aux = (int*)calloc((rangeFimQ-rangeIniQ)*k, sizeof(int*));
+
+	for (int i = 0; i < rangeFimQ-rangeIniQ; i++)
+		for (int l = 0; l < k; l++)
+			vizinhos_aux[i*k+l] = -1;
+	
+	PQ_dist = (float**)calloc((rangeFimQ-rangeIniQ), sizeof(float*));
+	for (int i = 0; i < (rangeFimQ-rangeIniQ); i++)
+		PQ_dist[i] = (float*)calloc(n, sizeof(float));
+	PQ_id = (int**)calloc((rangeFimQ-rangeIniQ), sizeof(int*));
+	for (int i = 0; i < (rangeFimQ-rangeIniQ); i++)
+		PQ_id[i] = (int*)calloc(n, sizeof(int));
+
+    if(processId == 0){
+		vizinhoo = (int**)calloc(nq, sizeof(int*));
+		for (int i = 0; i < nq; i++)
+			vizinhoo[i] = (int*)calloc(k, sizeof(int));
+
+		vizinho = (int*)calloc(nq*k, sizeof(int*));
+
+		for(int i = 0; i < n; i++)
+			MPI_Bcast(P[i], D, MPI_INT, 0, MPI_COMM_WORLD);	
+		for(int i = 0; i < nq; i++)
+			MPI_Bcast(Q[i], D, MPI_INT, 0, MPI_COMM_WORLD);	
+	}
+
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	if(processId == 0){
@@ -158,10 +158,8 @@ int main(int argc, char *argv[]){
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	if(processId == 0){
-		verificaKNN(Q, nq, P, n, D, k, vizinhos);
 		chrono_stop(&knnTime);
 		chrono_reportTime(&knnTime, "knnTime");
-
 		// calcular e imprimir a VAZAO (numero de operacoes/s)
 		double total_time_in_seconds = (double)chrono_gettotal(&knnTime) /
 									((double)1000 * 1000 * 1000);
@@ -172,10 +170,20 @@ int main(int argc, char *argv[]){
 		// double MBPS = ((double)(nmsg*tmsg) / ((double)total_time_in_seconds*1000*1000));
 		// printf("Throughput: %lf MB/s\n", MBPS*(nproc-1));
 
+		verificaKNN(Q, nq, P, n, D, k, vizinhos);
+
 		for (int i = 0; i < nq; i++)
         	free(vizinhos[i]);
     	free(vizinhos);
 	}
+
+	for (int i = 0; i < (rangeFimQ-rangeIniQ); i++){
+		free(PQ_dist[i]);
+		free(PQ_id[i]);
+	}
+	free(PQ_dist);
+	free(PQ_id);
+	free(vizinhos_aux);
 
     for(int i = 0; i < nq; i++)
         free(Q[i]);
